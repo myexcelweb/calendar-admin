@@ -8,7 +8,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { dayId, isoDate } from "./dates";
+import { dayId, isoDate, monthId } from "./dates";
 
 /**
  * Subscribes to calendars/{year}/months/{monthId}/holidays - one doc per
@@ -17,13 +17,13 @@ import { dayId, isoDate } from "./dates";
  * Path example: calendars/2026/months/01/holidays/26 == "2026/january/26"
  */
 export function useMonthHolidays(year, month) {
-  const [holidays, setHolidays] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const mId = monthId(month);
+  const path = `calendars/${year}/months/${mId}/holidays`;
 
-  const mId = String(month).padStart(2, "0");
+  // Tagged with its path, like useMonthDoc: never show the previous month's list
+  const [snapshot, setSnapshot] = useState({ path: null, holidays: [], error: "" });
 
   useEffect(() => {
-    setLoading(true);
     const col = collection(db, "calendars", String(year), "months", mId, "holidays");
     const unsub = onSnapshot(
       col,
@@ -34,14 +34,18 @@ export function useMonthHolidays(year, month) {
           ...d.data(),
         }));
         list.sort((a, b) => a.day - b.day);
-        setHolidays(list);
-        setLoading(false);
+        setSnapshot({ path, holidays: list, error: "" });
       },
-      () => setLoading(false)
+      (err) => setSnapshot({ path, holidays: [], error: `Couldn't load ${path}: ${err.message}` })
     );
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, mId]);
+
+  const current = snapshot.path === path;
+  const holidays = current ? snapshot.holidays : [];
+  const loading = !current;
+  const error = current ? snapshot.error : "";
 
   const holidayRef = (day) =>
     doc(db, "calendars", String(year), "months", mId, "holidays", dayId(day));
@@ -56,5 +60,5 @@ export function useMonthHolidays(year, month) {
 
   const removeHoliday = (day) => deleteDoc(holidayRef(day));
 
-  return { holidays, loading, setHoliday, removeHoliday };
+  return { holidays, loading, error, setHoliday, removeHoliday };
 }

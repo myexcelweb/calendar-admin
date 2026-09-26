@@ -1,40 +1,65 @@
 import { useState } from "react";
 import { useMonthHolidays } from "../lib/useMonthHolidays";
-import { currentYear, yearRange, MONTH_NAMES, daysInMonth } from "../lib/dates";
+import { MONTH_NAMES, daysInMonth, parseDay, writeErrorMessage } from "../lib/dates";
 import { useCalendar } from "../context/CalendarContext";
 import Drawer from "../components/Drawer";
+import MonthPicker from "../components/MonthPicker";
 
 const emptyForm = { day: "", name: "" };
 
 export default function Holidays() {
-  const { year, setYear, month, setMonth } = useCalendar();
-  const { holidays, loading, setHoliday, removeHoliday } = useMonthHolidays(year, month);
+  const { year, month } = useCalendar();
+  const { holidays, loading, error, setHoliday, removeHoliday } = useMonthHolidays(year, month);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [pageError, setPageError] = useState("");
 
   const maxDay = daysInMonth(year, month);
 
   const openAdd = () => {
     setEditingDay(null);
     setForm(emptyForm);
+    setFormError("");
     setDrawerOpen(true);
   };
 
   const openEdit = (h) => {
     setEditingDay(h.day);
     setForm({ day: String(h.day), name: h.name });
+    setFormError("");
     setDrawerOpen(true);
   };
 
   const handleSubmit = async () => {
-    const day = Number(form.day);
-    if (!form.name.trim() || !day || day < 1 || day > maxDay) return;
+    const day = parseDay(form.day, maxDay);
+    if (day === null) {
+      setFormError(`Enter a whole day number from 1 to ${maxDay}.`);
+      return;
+    }
+    if (!form.name.trim()) {
+      setFormError("Enter the holiday name.");
+      return;
+    }
+    if (form.name.trim().length > 100) {
+      setFormError("Keep the name under 100 characters.");
+      return;
+    }
+    // Only one holiday per day: adding on a day that already has one would replace it
+    const existing = holidays.find((h) => h.day === day);
+    if (!editingDay && existing &&
+        !confirm(`${MONTH_NAMES[month - 1]} ${day} already has "${existing.name}". Replace it?`)) {
+      return;
+    }
     setBusy(true);
+    setFormError("");
     try {
       await setHoliday(day, form.name);
       setDrawerOpen(false);
+    } catch (err) {
+      setFormError(writeErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -42,7 +67,12 @@ export default function Holidays() {
 
   const handleDelete = async (day) => {
     if (!confirm("Remove this holiday? This can't be undone.")) return;
-    await removeHoliday(day);
+    setPageError("");
+    try {
+      await removeHoliday(day);
+    } catch (err) {
+      setPageError(writeErrorMessage(err));
+    }
   };
 
   return (
@@ -61,22 +91,9 @@ export default function Holidays() {
         </button>
       </div>
 
-      <div className="field-row">
-        <select className="select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-          {yearRange(currentYear()).map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <select className="select" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-          {MONTH_NAMES.map((m, i) => (
-            <option key={m} value={i + 1}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </div>
+      <MonthPicker />
+
+      {(error || pageError) && <div className="page-error">{error || pageError}</div>}
 
       <div className="data-card">
         {loading ? (
@@ -127,6 +144,7 @@ export default function Holidays() {
           submitLabel={editingDay ? "Save changes" : "Add holiday"}
           busy={busy}
         >
+          {formError && <div className="page-error">{formError}</div>}
           <div className="form-group">
             <label className="form-label" htmlFor="h-day">
               Day of month — {MONTH_NAMES[month - 1]} {year}
@@ -137,6 +155,7 @@ export default function Holidays() {
               className="text-input"
               min={1}
               max={maxDay}
+              step={1}
               placeholder={`1–${maxDay}`}
               value={form.day}
               disabled={!!editingDay}
@@ -153,6 +172,7 @@ export default function Holidays() {
               id="h-name"
               className="text-input"
               placeholder="e.g. Independence Day"
+              maxLength={100}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required

@@ -3,12 +3,6 @@ export const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Firestore docs for optional_leaves / monthly_notes key months by lowercase
-// name (e.g. "december"), not by number - this matches that convention.
-export function monthKey(month /* 1-12 */) {
-  return MONTH_NAMES[month - 1].toLowerCase();
-}
-
 // --- New hierarchical schema helpers (calendars/{year}/months/{monthId}/holidays/{dayId}) ---
 
 /** Zero-pads a 1-2 digit number to a 2-character string id, e.g. 1 -> "01". */
@@ -44,4 +38,18 @@ export function yearRange(centerYear, span = 4) {
   const years = [];
   for (let y = centerYear - 1; y <= centerYear + span; y++) years.push(y);
   return years;
+}
+
+/** Day-of-month typed by the admin as a whole number in 1..maxDay, or null if invalid. */
+export function parseDay(value, maxDay) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= maxDay ? n : null;
+}
+
+/** Readable message for a failed Firestore write. */
+export function writeErrorMessage(err) {
+  if (err?.code === "permission-denied") {
+    return "Not saved: permission denied by Firestore. Check that you're signed in with the admin account.";
+  }
+  return `Not saved: ${err?.message || err}`;
 }

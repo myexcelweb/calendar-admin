@@ -1,4 +1,5 @@
-Set-Location "C:\Android\Calendar Gov\admin-website - Copy"
+# Commits and pushes this folder, wherever it is on disk
+Set-Location $PSScriptRoot
 
 git add .
 

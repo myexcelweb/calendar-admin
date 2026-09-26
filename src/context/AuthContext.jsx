@@ -18,6 +18,10 @@ const ALLOWED_ADMIN_EMAILS = (
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
 
+function isAllowedAdmin(user) {
+  return user.emailVerified && ALLOWED_ADMIN_EMAILS.includes(user.email?.toLowerCase());
+}
+
 const googleProvider = new GoogleAuthProvider();
 // Always show the account chooser instead of silently reusing the last
 // Google session, so it's obvious which account is signing in.
@@ -28,20 +32,23 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState("");
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+    // A non-admin account is signed straight back out and never reaches the admin screens
+    // (also covers a session restored on reload). The Firestore rules enforce the same check
+    const unsub = onAuthStateChanged(auth, (u) => {
+      if (u && !isAllowedAdmin(u)) {
+        setAuthError(`${u.email || "This account"} isn't an authorized admin account for this site.`);
+        setUser(null);
+        signOut(auth);
+        return;
+      }
+      setUser(u);
+    });
     return unsub;
   }, []);
 
   const loginWithGoogle = async () => {
     setAuthError("");
-    const result = await signInWithPopup(auth, googleProvider);
-    const email = result.user.email?.toLowerCase();
-    if (!ALLOWED_ADMIN_EMAILS.includes(email)) {
-      await signOut(auth);
-      setAuthError(
-        `${result.user.email} isn't an authorized admin account for this site.`
-      );
-    }
+    await signInWithPopup(auth, googleProvider);
   };
 
   const logout = () => signOut(auth);

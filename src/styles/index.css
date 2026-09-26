@@ -749,3 +749,13 @@ table.data-table {
   color: var(--muted);
   font-size: 14px;
 }
+
+/* Load / save failures shown at the top of a page */
+.page-error {
+  background: var(--coral-soft);
+  color: var(--coral);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  margin-bottom: 14px;
+}

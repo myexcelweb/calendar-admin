@@ -82,12 +82,15 @@ async function main() {
     const from = d.from || d.fromDate || d.date;
     const to = d.to || d.toDate || from;
     if (!from) continue;
+    // "yyyy-MM-dd" strings parse as UTC midnight: read them back with the UTC getters too,
+    // or the day shifts by one in time zones behind UTC
     const start = new Date(from);
     const end = new Date(to || from);
-    for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
-      const year = dt.getFullYear();
-      const month = dt.getMonth() + 1;
-      const day = dt.getDate();
+    if (isNaN(start) || isNaN(end)) continue;
+    for (let dt = new Date(start); dt <= end; dt.setUTCDate(dt.getUTCDate() + 1)) {
+      const year = dt.getUTCFullYear();
+      const month = dt.getUTCMonth() + 1;
+      const day = dt.getUTCDate();
       writes.push({
         path: `calendars/${year}/months/${pad2(month)}/holidays/${pad2(day)}`,
         data: {
@@ -121,9 +124,10 @@ async function main() {
     const byMonth = new Map();
     for (const iso of dates) {
       const dt = new Date(iso);
-      const month = dt.getMonth() + 1;
+      if (isNaN(dt) || dt.getUTCFullYear() !== year) continue;
+      const month = dt.getUTCMonth() + 1;
       if (!byMonth.has(month)) byMonth.set(month, []);
-      byMonth.get(month).push(dt.getDate());
+      byMonth.get(month).push(dt.getUTCDate());
     }
     for (const [month, days] of byMonth) {
       queueMonthField(year, month, "extraWorkingDays", days.sort((a, b) => a - b));

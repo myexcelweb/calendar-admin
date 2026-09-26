@@ -1,35 +1,46 @@
 import { useEffect, useState } from "react";
 import { deleteField } from "firebase/firestore";
 import { useMonthDoc } from "../lib/useMonthDoc";
-import { currentYear, yearRange, MONTH_NAMES } from "../lib/dates";
+import { MONTH_NAMES, writeErrorMessage } from "../lib/dates";
 import { useCalendar } from "../context/CalendarContext";
+import MonthPicker from "../components/MonthPicker";
 
 export default function Notes() {
-  const { year, setYear, month, setMonth } = useCalendar();
-  const { data, loading, setField } = useMonthDoc(year, month);
+  const { year, month } = useCalendar();
+  const { data, loading, error, setField } = useMonthDoc(year, month);
   const [draft, setDraft] = useState("");
   const [savedAt, setSavedAt] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const savedNote = data.note || "";
 
   useEffect(() => {
+    // Runs once the month's own data has loaded (loading stays true until then)
     setDraft(savedNote);
     setSavedAt(null);
+    setSaveError("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month, loading]);
 
-  const isDirty = draft !== savedNote;
+  const isDirty = draft.trim() !== savedNote;
 
   const save = async () => {
+    if (draft.length > 2000) {
+      setSaveError("Keep the note under 2000 characters.");
+      return;
+    }
     setBusy(true);
+    setSaveError("");
     try {
       if (draft.trim()) {
-        await setField("note", draft);
+        await setField("note", draft.trim());
       } else {
         await setField("note", deleteField());
       }
       setSavedAt(Date.now());
+    } catch (err) {
+      setSaveError(writeErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -48,22 +59,9 @@ export default function Notes() {
         </div>
       </div>
 
-      <div className="field-row">
-        <select className="select" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-          {yearRange(currentYear()).map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <select className="select" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-          {MONTH_NAMES.map((m, i) => (
-            <option key={m} value={i + 1}>
-              {m}
-            </option>
-          ))}
-        </select>
-      </div>
+      <MonthPicker />
+
+      {(error || saveError) && <div className="page-error">{error || saveError}</div>}
 
       <label className="form-label" htmlFor="note-text">
         Note — {MONTH_NAMES[month - 1]} {year}
@@ -74,6 +72,7 @@ export default function Notes() {
         placeholder={loading ? "Loading…" : "e.g. Lok Adalat on 13 Jan."}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
+        maxLength={2000}
         disabled={loading}
       />
 
